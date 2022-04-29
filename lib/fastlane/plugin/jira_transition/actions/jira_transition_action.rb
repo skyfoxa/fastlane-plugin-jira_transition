@@ -14,6 +14,7 @@ module Fastlane
         project_key   = params[:project_key]
         transition_id = params[:transition_id]
         comment_text  = params[:comment]
+        issue_ids     = params[:issue_keys]&.gsub(/[[:space:]]/, '')&.split(",")
 
         options = {
             site: site,
@@ -24,13 +25,16 @@ module Fastlane
         }
 
         client = JIRA::Client.new(options)
+        
+        if issue_ids.nil?
 
-        if Actions.lane_context[SharedValues::FL_CHANGELOG].nil?
-          changelog_configuration = FastlaneCore::Configuration.create(Actions::ChangelogFromGitCommitsAction.available_options, {})
-          Actions::ChangelogFromGitCommitsAction.run(changelog_configuration)
+            if Actions.lane_context[SharedValues::FL_CHANGELOG].nil?
+              changelog_configuration = FastlaneCore::Configuration.create(Actions::ChangelogFromGitCommitsAction.available_options, {})
+              Actions::ChangelogFromGitCommitsAction.run(changelog_configuration)
+            end
+
+            issue_ids = Actions.lane_context[SharedValues::FL_CHANGELOG].scan(/#{project_key}-\d+/i).uniq
         end
-
-        issue_ids = Actions.lane_context[SharedValues::FL_CHANGELOG].scan(/#{project_key}-\d+/i).uniq
 
         issue_ids.each do |issue_id|
           begin
@@ -88,6 +92,13 @@ module Fastlane
                                          verify_block: proc do |value|
                                            UI.user_error!("No transition id specified") if value.to_s.length == 0
                                          end),
+         FastlaneCore::ConfigItem.new(key: :issue_keys,
+                                      env_name: "FL_JIRA_ISSUE_KEYS",
+                                      description: "Issue keys you want to apply the transition. Overrides changelog keys",
+                                      optional: true,
+                                      verify_block: proc do |value|
+                                        UI.user_error!("No transition id specified") if value.to_s.length == 0
+                                      end)
             FastlaneCore::ConfigItem.new(key: :comment,
                                          env_name: "FL_JIRA_TRANSITION_COMMENT",
                                          description: "Comment to add if the transition is applied",
